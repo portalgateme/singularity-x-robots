@@ -20,8 +20,8 @@ logging.basicConfig(level=logging.INFO,
                     filename=log_filename,
                     filemode='a')
 
-auth = tweepy.OAuth2BearerHandler(X_BEARER_TOKEN)
-api = tweepy.API(auth)
+client = tweepy.Client(bearer_token=X_BEARER_TOKEN)
+
 
 def is_valid_evm_address(address):
     return Web3.isAddress(address) and Web3.isChecksumAddress(address)
@@ -30,35 +30,50 @@ def extract_address_from_text(text):
     match = re.search(r'0x[a-fA-F0-9]{40}', text)
     return match.group(0) if match else None
 
-async def handle_reply(status, pool):
-    reply_text = status.text
+def is_follower(user_id, target_user_id):
+    pagination_token = None
+    while True:
+        followers = client.get_users_followers(target_user_id, pagination_token=pagination_token)
+        if followers.data:
+            for follower in followers.data:
+                if follower.id == user_id:
+                    return True
+        if 'next_token' in followers.meta:
+            pagination_token = followers.meta['next_token']
+        else:
+            break
+    return False
+
+async def handle_reply(tweet, pool):
+    reply_text = tweet.text
     address = extract_address_from_text(reply_text)
-    if address and is_valid_evm_address(address):
-        ref_code = await get_referral_code(status.user.screen_name, pool)
+    if address and is_valid_evm_address(address) and is_follower(tweet.author_id, X_USER_ID):
+        ref_code = await get_referral_code(tweet.author.username, pool)
         ref_link = f"https://app.thesingularity.network/referral/{ref_code}"
-        reply_message = f"@{status.user.screen_name} Thank you! Here is your referral link: app.thesingularity.network{ref_link}"
+        reply_message = f"@{tweet.author.username} Thank you! Here is your referral link: {ref_link}"
     else:
         reply_message = ""
     return reply_message
 
-class StreamListener(tweepy.StreamListener):
-    def __init__(self, pool):
-        super().__init__()
+class StreamListener(tweepy.StreamingClient):
+    def __init__(self, bearer_token, pool):
+        super().__init__(bearer_token)
         self.pool = pool
+        self.retry_count = 0
 
-    def on_status(self, status):
-        if hasattr(status, 'in_reply_to_status_id_str') and status. in_reply_to_status_id_str == TARGET_X_ID:
-            asyncio.run(self.process_reply(status))
+    def on_tweet(self, tweet):
+        if tweet.in_reply_to_user_id == TARGET_X_ID:
+            asyncio.run(self.process_reply(tweet))
 
-    async def process_reply(self, status):
+    async def process_reply(self, tweet):
         try:
-            reply_message = await handle_reply(status, self.pool)
+            reply_message = await handle_reply(tweet, self.pool)
             if reply_message != "":
-                api.update_status(status=reply_message, in_reply_to_status_id=status.id)
+                client.create_tweet(text=reply_message, in_reply_to_tweet_id=tweet.id)
         except Exception as e:
             raise e
 
-    def on_error(self, status_code):
+    def on_errors(self, status_code):
         logging.error(f"Stream encountered error: {status_code}")
         if status_code == 420 or status_code == 429:
             self.retry_count += 1
@@ -71,13 +86,15 @@ class StreamListener(tweepy.StreamListener):
 
 async def main():
     pool = await create_pool()
-    refLinkListner = StreamListener(pool)
-    stream = tweepy.Stream(auth=api.auth, listener=refLinkListner)
+
+    refLinkListner = StreamListener(X_BEARER_TOKEN,pool)
+    
     while True:
         try:
-            stream.filter(follow=[X_USER_ID])
+            refLinkListner.add_rules(tweepy.StreamRule(f"to:{X_USER_ID}"))
+            refLinkListner.filter()
         except Exception as e:
-            logging.error(f"Stream encountered error: {e}")
+            logging.error(f"Error: {e}")
             await asyncio.sleep(30)
     
 if __name__ == "__main__":
