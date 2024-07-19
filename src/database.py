@@ -17,19 +17,21 @@ async def ref_code_exists(ref_code, connection):
     return bool(result)
 
 async def get_referral_code(wallet, pool):
+    
     async with pool.acquire() as connection:
-        result = await connection.fetchrow('SELECT ref_code FROM ref_code WHERE wallet = $1', wallet)
-        if result:
-            return result['ref_code']
-
-        alphabet = '0123456789abcdefghijklmnopqrstuvwxyz'
-        size = 16
-        for _ in range(3):
-            ref_code = generate(alphabet, size)
-            if not await ref_code_exists(ref_code, connection):
-                await connection.execute('INSERT INTO ref_code (wallet, ref_code) VALUES ($1, $2)', wallet, ref_code)
-                return ref_code
-
+        try:
+            result = await connection.fetchrow('SELECT ref_code FROM ref_code WHERE wallet = $1', wallet)
+            if result:
+                return result['ref_code']
+            alphabet = '0123456789abcdefghijklmnopqrstuvwxyz'
+            size = 16
+            for _ in range(3):
+                ref_code = generate(alphabet, size)
+                if not await ref_code_exists(ref_code, connection):
+                    await connection.execute('INSERT INTO ref_code (wallet, ref_code) VALUES ($1, $2)', wallet, ref_code)
+                    return ref_code
+        except Exception as e:
+            raise e
         raise Exception('Failed to create referral code, please retry')
 
 def is_address_equals(address1, address2):
