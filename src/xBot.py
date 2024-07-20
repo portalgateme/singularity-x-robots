@@ -8,7 +8,9 @@ from dotenv import load_dotenv
 from database import create_pool, get_referral_code
 
 load_dotenv()
-log_filename = os.getenv('LOG_FILENAME', 'error.log')
+log_filename = os.getenv('LOG_FILENAME', 'log.log')
+
+SLEEP_TIME = os.getenv('SLEEP_TIME', 300)
 
 X_BEARER_TOKEN = os.getenv('X_BEARER_TOKEN')
 X_API_KEY = os.getenv('X_API_KEY')
@@ -18,6 +20,8 @@ X_ACCESS_TOKEN_SECRET = os.getenv('X_ACCESS_TOKEN_SECRET')
 
 TARGET_X_ID = os.getenv('TARGET_X_ID')
 X_USER_ID = os.getenv('X_USER_ID')
+
+
 
 
 logging.basicConfig(level=logging.INFO, 
@@ -92,7 +96,7 @@ async def main():
         except Exception as e:
             logging.error(f"Error in main loop: {e}")
 
-        await asyncio.sleep(60)  # 每分钟检查一次新的回复
+        await asyncio.sleep(SLEEP_TIME)  # 每x分钟检查一次新的回复
     
 if __name__ == "__main__":
     asyncio.run(main())
