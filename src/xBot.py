@@ -10,7 +10,7 @@ from database import create_pool, get_referral_code
 load_dotenv()
 log_filename = os.getenv('LOG_FILENAME', 'log.log')
 
-SLEEP_TIME = os.getenv('SLEEP_TIME', 300)
+SLEEP_TIME = int(os.getenv('SLEEP_TIME', 300))
 
 X_BEARER_TOKEN = os.getenv('X_BEARER_TOKEN')
 X_API_KEY = os.getenv('X_API_KEY')
@@ -20,9 +20,6 @@ X_ACCESS_TOKEN_SECRET = os.getenv('X_ACCESS_TOKEN_SECRET')
 
 TARGET_X_ID = os.getenv('TARGET_X_ID')
 X_USER_ID = os.getenv('X_USER_ID')
-
-
-
 
 logging.basicConfig(level=logging.INFO, 
                     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -34,6 +31,16 @@ client = tweepy.Client(bearer_token=X_BEARER_TOKEN,
                        consumer_secret=X_API_SECRET_KEY,
                        access_token=X_ACCESS_TOKEN,
                        access_token_secret=X_ACCESS_TOKEN_SECRET)
+
+def read_last_reply_id(filename):
+    if os.path.exists(filename):
+        with open(filename, 'r') as file:
+            return file.read().strip()
+    return None
+
+def write_last_reply_id(filename, reply_id):
+    with open(filename, 'w') as file:
+        file.write(str(reply_id))
 
 def is_valid_evm_address(address):
     return Web3.is_address(address) and Web3.is_checksum_address(address)
@@ -73,9 +80,10 @@ async def handle_reply(tweet, pool):
     return reply_message
 
 
+
 async def main():
     pool = await create_pool()
-    last_reply_id = None
+    last_reply_id = read_last_reply_id('last_reply_id.txt')
 
     while True:
         try:
@@ -92,6 +100,7 @@ async def main():
                         client.create_tweet(text=reply_message, in_reply_to_tweet_id=tweet.id)
                         print(f"Replied to tweet: {tweet.id}")
                 last_reply_id = mentions.data[0].id
+                write_last_reply_id('last_reply_id.txt', last_reply_id)
 
         except Exception as e:
             logging.error(f"Error in main loop: {e}")
