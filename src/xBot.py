@@ -88,14 +88,17 @@ async def main():
     while True:
         try:
             query = f"to:{X_USER_ID} conversation_id:{TARGET_X_ID}"
-            if last_reply_id:
-                mentions = client.search_recent_tweets(query=query, since_id=last_reply_id, max_results=100)
-            else:
-                mentions = client.search_recent_tweets(query=query, max_results=100)
+            ##if last_reply_id:
+            ##    mentions = client.search_recent_tweets(query=query, since_id=last_reply_id, max_results=100)
+            ##else:
+            mentions = client.search_recent_tweets(query=query, max_results=100)
             if mentions.data:
                 for tweet in mentions.data:
                     reply_message = await handle_reply(tweet, pool)
                     if reply_message:
+                        if last_reply_id:
+                            if mentions.data[0].id == last_reply_id:
+                                continue
                         print(f"Replying to tweet: {tweet.id}")
                         client.create_tweet(text=reply_message, in_reply_to_tweet_id=tweet.id)
                         print(f"Replied to tweet: {tweet.id}")
